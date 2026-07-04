@@ -24,13 +24,6 @@ from visualizacion import (
     grafico_tradeoff,
     formatear_comparacion,
 )
-from tvu import (
-    preparar_tvu,
-    resumen_tvu,
-    grafico_cantidad_riesgo,
-    grafico_valor_riesgo,
-    formatear_tvu,
-)
 
 warnings.filterwarnings("ignore")
 
@@ -399,22 +392,6 @@ def grafico_comparacion_economica_sku(df_economico_sku: pd.DataFrame):
     fig.update_layout(margin=dict(l=20, r=20, t=60, b=20))
     return fig
 
-def grafico_tvu_alto_medio(resumen_vencimientos: pd.DataFrame):
-    df = resumen_vencimientos.copy()
-    df = df[df["riesgo_tvu"].isin(["🔴 Alto", "🟡 Medio"])]
-
-    fig = px.pie(
-        df,
-        names="riesgo_tvu",
-        values="valor_en_riesgo",
-        hole=0.45,
-        title="Valor en riesgo por vencimiento",
-    )
-    fig.update_traces(textposition="inside", textinfo="percent+label")
-    fig.update_layout(margin=dict(l=20, r=20, t=60, b=20))
-    return fig
-
-
 def grafico_modelos_ganadores(df_comparacion: pd.DataFrame):
     mejores = df_comparacion[df_comparacion["Es mejor"]].copy()
     conteo = mejores["Método"].value_counts().reset_index()
@@ -431,6 +408,376 @@ def grafico_modelos_ganadores(df_comparacion: pd.DataFrame):
     fig.update_traces(textposition="inside", textinfo="percent+label")
     fig.update_layout(margin=dict(l=20, r=20, t=60, b=20))
     return fig
+
+
+
+# =========================================================
+# FUNCIONES AUXILIARES - TVU POR LOTE
+# =========================================================
+def _normalizar_nombre_columna(columna) -> str:
+    return (
+        str(columna)
+        .strip()
+        .lower()
+        .replace("\n", " ")
+        .replace("\t", " ")
+        .replace("_", " ")
+        .replace("-", " ")
+    )
+
+
+def _mapear_columnas_tvu(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Estandariza columnas de la hoja TVU aunque vengan con espacios,
+    mayúsculas/minúsculas o nombres alternativos.
+    """
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    alias = {
+        "lote": "lote",
+        "lot": "lote",
+        "batch": "lote",
+        "batch number": "lote",
+        "n lote": "lote",
+        "nro lote": "lote",
+        "numero lote": "lote",
+        "número lote": "lote",
+
+        "demanda agrupada final": "producto",
+        "producto": "producto",
+        "sku": "producto",
+        "product id": "producto",
+        "product": "producto",
+        "id producto": "producto",
+        "codigo": "producto",
+        "código": "producto",
+        "grupo de demanda": "producto",
+        "grupo demanda": "producto",
+
+        "tvu": "tvu",
+        "tvu months": "tvu",
+        "tvu meses": "tvu",
+        "vida util": "tvu",
+        "vida útil": "tvu",
+        "meses vencimiento": "tvu",
+
+        "costo uni": "costo_unitario",
+        "costo unitario": "costo_unitario",
+        "costo unit": "costo_unitario",
+        "costo": "costo_unitario",
+        "costo_unitario": "costo_unitario",
+        "unit cost": "costo_unitario",
+        "unit value": "costo_unitario",
+        "unit_cost": "costo_unitario",
+        "unit_value": "costo_unitario",
+        "valor unitario": "costo_unitario",
+
+        "warehouse": "warehouse",
+        "almacen": "warehouse",
+        "almacén": "warehouse",
+        "bodega": "warehouse",
+        "subinventario": "warehouse",
+
+        "stock": "stock",
+        "stock actual": "stock",
+        "stock_actual": "stock",
+        "initial stock": "stock",
+        "initial_stock": "stock",
+        "inventario": "stock",
+    }
+
+    df = df.copy()
+    columnas_mapeadas = {}
+    for c in df.columns:
+        c_norm = _normalizar_nombre_columna(c)
+        columnas_mapeadas[c] = alias.get(c_norm, c_norm)
+
+    return df.rename(columns=columnas_mapeadas)
+
+
+def leer_tvu_desde_excel(xls: pd.ExcelFile) -> pd.DataFrame:
+    """
+    Lee la hoja TVU del Excel. Si no existe, devuelve DataFrame vacío.
+    """
+    if xls is None or "TVU" not in xls.sheet_names:
+        return pd.DataFrame()
+
+    return pd.read_excel(xls, sheet_name="TVU")
+
+
+def clasificar_riesgo_tvu(tvu):
+    """
+    Clasificación por TVU.
+    Se usa < 5 para que valores decimales como 4.5 no queden sin clasificar.
+    """
+    valor = pd.to_numeric(tvu, errors="coerce")
+
+    if pd.isna(valor) or valor <= 0:
+        return "Sin dato"
+    if 0 <= valor < 5:
+        return "🔴 Alto"
+    if 5 <= valor <= 10:
+        return "🟡 Medio"
+    if valor > 10:
+        return "🟢 Bajo"
+
+    return "Sin dato"
+
+
+def preparar_tvu_lotes(df_tvu_raw: pd.DataFrame) -> pd.DataFrame:
+    """
+    Prepara el TVU por lote usando la hoja TVU.
+    Cada fila representa un lote con su propio TVU, stock y costo.
+    """
+    columnas_salida = [
+        "lote",
+        "producto",
+        "warehouse",
+        "tvu",
+        "stock",
+        "costo_unitario",
+        "valor_en_riesgo",
+        "riesgo_tvu",
+        "orden_riesgo",
+    ]
+
+    if df_tvu_raw is None or df_tvu_raw.empty:
+        return pd.DataFrame(columns=columnas_salida)
+
+    df = _mapear_columnas_tvu(df_tvu_raw)
+
+    for col in ["lote", "producto", "warehouse", "tvu", "stock", "costo_unitario"]:
+        if col not in df.columns:
+            df[col] = None
+
+    df = df[["lote", "producto", "warehouse", "tvu", "stock", "costo_unitario"]].copy()
+
+    df["lote"] = df["lote"].astype(str).str.strip()
+    df["producto"] = normalizar_product_id(df["producto"])
+    df["warehouse"] = df["warehouse"].astype(str).str.strip()
+
+    df["tvu"] = pd.to_numeric(df["tvu"], errors="coerce")
+    df["stock"] = pd.to_numeric(df["stock"], errors="coerce").fillna(0)
+    df["costo_unitario"] = pd.to_numeric(df["costo_unitario"], errors="coerce").fillna(0)
+
+    df["valor_en_riesgo"] = df["stock"] * df["costo_unitario"]
+    df["riesgo_tvu"] = df["tvu"].apply(clasificar_riesgo_tvu)
+
+    orden = {
+        "🔴 Alto": 1,
+        "🟡 Medio": 2,
+        "🟢 Bajo": 3,
+        "Sin dato": 4,
+    }
+    df["orden_riesgo"] = df["riesgo_tvu"].map(orden).fillna(4).astype(int)
+
+    df = df.sort_values(
+        ["orden_riesgo", "tvu", "valor_en_riesgo"],
+        ascending=[True, True, False],
+        na_position="last",
+    ).reset_index(drop=True)
+
+    return df[columnas_salida]
+
+
+def resumen_tvu_lotes(df_tvu: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    """
+    Genera resumen por riesgo y KPIs superiores del módulo TVU.
+    """
+    if df_tvu is None or df_tvu.empty:
+        resumen = pd.DataFrame(
+            {
+                "riesgo_tvu": ["🔴 Alto", "🟡 Medio", "🟢 Bajo", "Sin dato"],
+                "cantidad_lotes": [0, 0, 0, 0],
+                "stock": [0, 0, 0, 0],
+                "valor_en_riesgo": [0.0, 0.0, 0.0, 0.0],
+            }
+        )
+        kpis = {
+            "lotes_alto": 0,
+            "lotes_medio": 0,
+            "stock_riesgo": 0.0,
+            "valor_riesgo": 0.0,
+            "lote_critico": "Sin datos",
+        }
+        return resumen, kpis
+
+    orden_categorias = ["🔴 Alto", "🟡 Medio", "🟢 Bajo", "Sin dato"]
+
+    resumen = (
+        df_tvu.groupby("riesgo_tvu", as_index=False)
+        .agg(
+            cantidad_lotes=("lote", "count"),
+            stock=("stock", "sum"),
+            valor_en_riesgo=("valor_en_riesgo", "sum"),
+        )
+    )
+
+    resumen = (
+        pd.DataFrame({"riesgo_tvu": orden_categorias})
+        .merge(resumen, on="riesgo_tvu", how="left")
+        .fillna({"cantidad_lotes": 0, "stock": 0, "valor_en_riesgo": 0})
+    )
+
+    resumen["cantidad_lotes"] = resumen["cantidad_lotes"].astype(int)
+
+    en_riesgo = df_tvu[df_tvu["riesgo_tvu"].isin(["🔴 Alto", "🟡 Medio"])].copy()
+
+    kpis = {
+        "lotes_alto": int((df_tvu["riesgo_tvu"] == "🔴 Alto").sum()),
+        "lotes_medio": int((df_tvu["riesgo_tvu"] == "🟡 Medio").sum()),
+        "stock_riesgo": float(en_riesgo["stock"].sum()) if not en_riesgo.empty else 0.0,
+        "valor_riesgo": float(en_riesgo["valor_en_riesgo"].sum()) if not en_riesgo.empty else 0.0,
+        "lote_critico": str(en_riesgo.iloc[0]["lote"]) if not en_riesgo.empty else "Sin datos",
+    }
+
+    return resumen, kpis
+
+
+def resumen_tvu_por_producto(df_tvu: pd.DataFrame) -> pd.DataFrame:
+    """
+    Agrupa por DEMANDA AGRUPADA FINAL / producto.
+    """
+    columnas = [
+        "Producto",
+        "Cantidad de lotes",
+        "Stock total",
+        "Valor total en riesgo",
+        "TVU mínimo",
+        "Riesgo más crítico",
+    ]
+
+    if df_tvu is None or df_tvu.empty:
+        return pd.DataFrame(columns=columnas)
+
+    df = df_tvu.copy()
+    resumen = (
+        df.groupby("producto", as_index=False)
+        .agg(
+            cantidad_lotes=("lote", "count"),
+            stock_total=("stock", "sum"),
+            valor_total_en_riesgo=("valor_en_riesgo", "sum"),
+            tvu_minimo=("tvu", "min"),
+            orden_mas_critico=("orden_riesgo", "min"),
+        )
+    )
+
+    mapa_riesgo = {
+        1: "🔴 Alto",
+        2: "🟡 Medio",
+        3: "🟢 Bajo",
+        4: "Sin dato",
+    }
+    resumen["riesgo_mas_critico"] = resumen["orden_mas_critico"].map(mapa_riesgo)
+
+    resumen = resumen.sort_values(
+        ["orden_mas_critico", "valor_total_en_riesgo", "tvu_minimo"],
+        ascending=[True, False, True],
+        na_position="last",
+    )
+
+    resumen = resumen.rename(
+        columns={
+            "producto": "Producto",
+            "cantidad_lotes": "Cantidad de lotes",
+            "stock_total": "Stock total",
+            "valor_total_en_riesgo": "Valor total en riesgo",
+            "tvu_minimo": "TVU mínimo",
+            "riesgo_mas_critico": "Riesgo más crítico",
+        }
+    )
+
+    return resumen[columnas]
+
+
+def grafico_tvu_lotes_riesgo(df_resumen: pd.DataFrame):
+    fig = px.bar(
+        df_resumen,
+        x="riesgo_tvu",
+        y="cantidad_lotes",
+        title="Cantidad de lotes por nivel de riesgo",
+        labels={
+            "riesgo_tvu": "Riesgo",
+            "cantidad_lotes": "Cantidad de lotes",
+        },
+    )
+    fig.update_layout(margin=dict(l=20, r=20, t=60, b=20))
+    return fig
+
+
+def grafico_tvu_lotes_valor(df_resumen: pd.DataFrame):
+    df = df_resumen[df_resumen["riesgo_tvu"].isin(["🔴 Alto", "🟡 Medio", "🟢 Bajo"])].copy()
+
+    fig = px.pie(
+        df,
+        names="riesgo_tvu",
+        values="valor_en_riesgo",
+        hole=0.45,
+        title="Valor económico por riesgo",
+    )
+    fig.update_traces(textposition="inside", textinfo="percent+label")
+    fig.update_layout(margin=dict(l=20, r=20, t=60, b=20))
+    return fig
+
+
+def grafico_tvu_alto_medio(resumen_vencimientos: pd.DataFrame):
+    df = resumen_vencimientos.copy()
+    df = df[df["riesgo_tvu"].isin(["🔴 Alto", "🟡 Medio"])]
+
+    fig = px.pie(
+        df,
+        names="riesgo_tvu",
+        values="valor_en_riesgo",
+        hole=0.45,
+        title="Valor en riesgo por vencimiento",
+    )
+    fig.update_traces(textposition="inside", textinfo="percent+label")
+    fig.update_layout(margin=dict(l=20, r=20, t=60, b=20))
+    return fig
+
+
+def formatear_tvu_lotes(df_tvu: pd.DataFrame) -> pd.DataFrame:
+    if df_tvu is None or df_tvu.empty:
+        return pd.DataFrame(
+            columns=[
+                "Lote",
+                "Producto",
+                "Warehouse",
+                "TVU",
+                "Stock",
+                "Costo unitario",
+                "Valor en riesgo",
+                "Riesgo",
+            ]
+        )
+
+    df = df_tvu.copy()
+    df = df.rename(
+        columns={
+            "lote": "Lote",
+            "producto": "Producto",
+            "warehouse": "Warehouse",
+            "tvu": "TVU",
+            "stock": "Stock",
+            "costo_unitario": "Costo unitario",
+            "valor_en_riesgo": "Valor en riesgo",
+            "riesgo_tvu": "Riesgo",
+        }
+    )
+
+    return df[
+        [
+            "Lote",
+            "Producto",
+            "Warehouse",
+            "TVU",
+            "Stock",
+            "Costo unitario",
+            "Valor en riesgo",
+            "Riesgo",
+        ]
+    ]
 
 
 # =========================================================
@@ -483,7 +830,8 @@ if modo_datos == "Generar datos sintéticos":
     )
     df_parametros = pd.DataFrame()
     df_forecast_empresa = pd.DataFrame(columns=["date", "product_id", "forecast_company"])
-
+    df_tvu_raw = pd.DataFrame()
+    
 else:
     archivo = st.sidebar.file_uploader(
         "Sube tu archivo Excel unificado",
@@ -545,39 +893,22 @@ else:
             st.stop()
 
         df_forecast_empresa = leer_forecast_comercial_opcional(xls)
-
+        df_tvu_raw = leer_tvu_desde_excel(xls)
+        
     except Exception as e:
         st.error(f"Error procesando el archivo: {str(e)}")
         st.stop()
 
 # =========================================================
-# TVU - RIESGO DE VENCIMIENTO
+# TVU - RIESGO DE VENCIMIENTO POR LOTE
 # =========================================================
-df_tvu = preparar_tvu(df_parametros)
-resumen_vencimientos, kpis_tvu = resumen_tvu(df_tvu)
+df_tvu = preparar_tvu_lotes(df_tvu_raw)
+resumen_vencimientos, kpis_tvu = resumen_tvu_lotes(df_tvu)
+resumen_productos_tvu = resumen_tvu_por_producto(df_tvu)
 
-if df_tvu.empty:
-    total_skus_tvu = 0
-    valor_alto = 0.0
-    valor_medio = 0.0
-    valor_bajo = 0.0
-    valor_tvu_riesgo = 0.0
-else:
-    total_skus_tvu = df_tvu["product_id"].nunique()
-    valor_alto = df_tvu.loc[
-        df_tvu["riesgo_tvu"] == "🔴 Alto",
-        "valor_en_riesgo",
-    ].sum()
-    valor_medio = df_tvu.loc[
-        df_tvu["riesgo_tvu"] == "🟡 Medio",
-        "valor_en_riesgo",
-    ].sum()
-    valor_bajo = df_tvu.loc[
-        df_tvu["riesgo_tvu"] == "🟢 Bajo",
-        "valor_en_riesgo",
-    ].sum()
-    # Valor realmente comprometido: alto + medio. No incluye bajo.
-    valor_tvu_riesgo = valor_alto + valor_medio
+valor_tvu_riesgo = kpis_tvu["valor_riesgo"]
+total_lotes_tvu = len(df_tvu)
+total_skus_tvu = df_tvu["producto"].nunique() if not df_tvu.empty else 0
 
 # =========================================================
 # MÓDULO TVU INDEPENDIENTE
@@ -586,67 +917,79 @@ if modulo == "⚠️ TVU - Productos próximos a vencer":
     st.subheader("⚠️ Infografía TVU: Productos próximos a vencer")
 
     st.write(
-        "Clasificación de productos según los meses restantes para su vencimiento. "
-        "Riesgo alto: hasta 3 meses; riesgo medio: más de 3 y hasta 6 meses; "
-        "riesgo bajo: más de 6 meses."
+        "Clasificación por lote usando la hoja **TVU**. "
+        "Riesgo alto: TVU desde 1 hasta antes de 5; riesgo medio: TVU de 5 a 10; "
+        "riesgo bajo: TVU mayor a 10."
     )
 
     if df_tvu.empty:
         st.warning(
-            "No se pudo construir la infografía TVU. Verifica que la hoja 'Datos' tenga columnas como: "
-            "GRUPO DE DEMANDA, initial_stock, tvu_months y unit_value."
+            "No se pudo construir la infografía TVU. Verifica que el Excel tenga una hoja llamada "
+            "'TVU' con columnas: Lote, DEMANDA AGRUPADA FINAL, TVU, COSTO UNI, WAREHOUSE y STOCK."
         )
     else:
         col_t1, col_t2, col_t3, col_t4 = st.columns(4)
 
-        col_t1.metric("🔴 SKUs riesgo alto", f"{kpis_tvu['sku_alto']:,}")
-        col_t2.metric("🟡 SKUs riesgo medio", f"{kpis_tvu['sku_medio']:,}")
+        col_t1.metric("🔴 Lotes riesgo alto", f"{kpis_tvu['lotes_alto']:,}")
+        col_t2.metric("🟡 Lotes riesgo medio", f"{kpis_tvu['lotes_medio']:,}")
         col_t3.metric("Stock en riesgo", f"{kpis_tvu['stock_riesgo']:,.0f}")
         col_t4.metric("Valor en riesgo", f"S/ {kpis_tvu['valor_riesgo']:,.2f}")
 
-        st.info(f"SKU más crítico: **{kpis_tvu['sku_critico']}**")
+        st.info(f"Lote más crítico: **{kpis_tvu['lote_critico']}**")
 
         col_g1, col_g2 = st.columns(2)
 
-        with col_g1:
+       with col_g1:
             st.plotly_chart(
-                grafico_cantidad_riesgo(resumen_vencimientos),
+                grafico_tvu_lotes_riesgo(resumen_vencimientos),
                 use_container_width=True,
             )
 
         with col_g2:
             st.plotly_chart(
-                grafico_valor_riesgo(resumen_vencimientos),
+                grafico_tvu_lotes_valor(resumen_vencimientos),
                 use_container_width=True,
             )
 
-        st.markdown("### 🚨 Top 10 productos más críticos")
+   st.markdown("### 🚨 Top 10 lotes más críticos")
 
-        top_10 = df_tvu[
-            df_tvu["riesgo_tvu"].isin(["🔴 Alto", "🟡 Medio"])
-        ].head(10)
+        top_10 = df_tvu.copy().head(10)
 
-        if top_10.empty:
-            st.success("No hay productos en riesgo alto o medio.")
-        else:
-            st.dataframe(
-                formatear_tvu(top_10),
-                use_container_width=True,
-                hide_index=True,
-            )
+        st.dataframe(
+            formatear_tvu_lotes(top_10),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        st.markdown("### 📦 Resumen por producto agrupado")
+
+        st.dataframe(
+            resumen_productos_tvu.style.format({
+                "Stock total": "{:,.0f}",
+                "Valor total en riesgo": "S/ {:,.2f}",
+                "TVU mínimo": "{:,.2f}",
+            }),
+            use_container_width=True,
+            hide_index=True,
+        )
 
         st.markdown("### 📋 Detalle completo TVU")
 
         st.dataframe(
-            formatear_tvu(df_tvu),
+            formatear_tvu_lotes(df_tvu).style.format({
+                "TVU": "{:,.2f}",
+                "Stock": "{:,.0f}",
+                "Costo unitario": "S/ {:,.2f}",
+                "Valor en riesgo": "S/ {:,.2f}",
+            }),
             use_container_width=True,
             hide_index=True,
         )
 
         st.download_button(
-            label="📥 Descargar TVU (CSV)",
+            label="📥 Descargar TVU por lote (CSV)",
             data=df_tvu.to_csv(index=False).encode("utf-8"),
-            file_name="reporte_tvu_vencimientos.csv",
+            file_name="reporte_tvu_lotes.csv",
             mime="text/csv",
             use_container_width=True,
         )
@@ -947,6 +1290,9 @@ with tab1:
     )
 
     st.write("<br>", unsafe_allow_html=True)
+
+    csv_mejores = resumen_mejores.to_csv(index=False).encode("utf-8")
+    
     st.download_button(
         label="📥 Descargar detalle completo en CSV",
         data=resumen_mejores.to_csv(index=False).encode("utf-8"),
