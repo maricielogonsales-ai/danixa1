@@ -939,7 +939,7 @@ if modulo == "⚠️ TVU - Productos próximos a vencer":
 
         col_g1, col_g2 = st.columns(2)
 
-       with col_g1:
+        with col_g1:
             st.plotly_chart(
                 grafico_tvu_lotes_riesgo(resumen_vencimientos),
                 use_container_width=True,
