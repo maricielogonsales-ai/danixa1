@@ -951,7 +951,7 @@ if modulo == "⚠️ TVU - Productos próximos a vencer":
                 use_container_width=True,
             )
 
-   st.markdown("### 🚨 Top 10 lotes más críticos")
+        st.markdown("### 🚨 Top 10 lotes más críticos")
 
         top_10 = df_tvu.copy().head(10)
 
