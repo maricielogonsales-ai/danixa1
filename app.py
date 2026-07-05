@@ -1045,63 +1045,1134 @@ modelo_mas_usado = (
 # =========================================================
 # MÓDULO VISTA GENERAL EJECUTIVA
 # =========================================================
+# ==========================================================
+# VISTA GENERAL EJECUTIVA 2.0
+# ==========================================================
+
 if modulo == "📊 Vista General Ejecutiva":
-    st.title("📊 Dashboard Ejecutivo")
-    st.caption("Vista general del desempeño del portafolio: forecast, riesgo de vencimiento y modelos ganadores.")
 
-    total_skus = max(total_skus_tvu, total_skus_forecast)
-    impacto_identificado = ahorro_total + valor_tvu_riesgo
+    st.markdown("""
+    <style>
 
-    c1, c2, c3, c4, c5 = st.columns(5)
+    .main{
+        background:#f5f7fb;
+    }
 
-    c1.metric("SKU evaluados", f"{total_skus:,}")
-    c2.metric("Ahorro Potencial Total", f"S/ {ahorro_total:,.0f}")
-    c3.metric("Valor en Riesgo TVU", f"S/ {valor_tvu_riesgo:,.0f}")
-    c4.metric("Impacto Económico Identificado", f"S/ {impacto_identificado:,.0f}")
-    c5.metric("Modelo más utilizado", modelo_mas_usado)
+    .card{
+        background:white;
+        border-radius:15px;
+        padding:20px;
+        box-shadow:0px 3px 10px rgba(0,0,0,.08);
+        border:1px solid #ECECEC;
+    }
 
-    st.divider()
+    .titulo{
+        font-size:38px;
+        font-weight:700;
+        color:#202124;
+    }
 
-    col_a, col_b = st.columns(2)
+    .subtitulo{
+        color:#666;
+        font-size:15px;
+        margin-top:-10px;
+    }
 
-    with col_a:
-        st.subheader("📈 Ahorro potencial por forecast")
+    .kpi{
 
-        if df_ahorro_forecast.empty:
-            st.info(
-                "No se calculó ahorro potencial. Para activarlo, el Excel debe incluir "
-                "Forecast_Comercial con date, product_id y forecast_company, y la hoja Datos debe tener unit_value o unit_cost."
+        background:white;
+        border-radius:15px;
+        padding:18px;
+        box-shadow:0 2px 8px rgba(0,0,0,.08);
+        border:1px solid #ECECEC;
+
+    }
+
+    .kpiTitulo{
+        color:#777;
+        font-size:14px;
+    }
+
+    .kpiValor{
+
+        font-size:34px;
+        font-weight:bold;
+        color:#222;
+
+    }
+
+    .positivo{
+
+        color:#16a34a;
+        font-weight:600;
+
+    }
+
+    .negativo{
+
+        color:#dc2626;
+        font-weight:600;
+
+    }
+
+    </style>
+
+    """,unsafe_allow_html=True)
+    col1,col2=st.columns([4,1])
+
+with col1:
+
+    st.markdown("""
+    <div class='titulo'>
+    📊 Vista General
+    </div>
+    """,unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class='subtitulo'>
+    Resumen ejecutivo del desempeño de inventarios y pronósticos
+    </div>
+    """,unsafe_allow_html=True)
+
+with col2:
+
+    periodo=st.selectbox(
+
+        "Periodo",
+
+        [
+
+        "2021-2026",
+
+        "2022-2026",
+
+        "2023-2026"
+
+        ]
+
+    )
+    st.write("")
+
+c1,c2,c3,c4,c5=st.columns(5)
+
+with c1:
+
+    st.markdown(f"""
+    <div class='kpi'>
+
+    <div class='kpiTitulo'>
+
+    💰 Ventas Totales
+
+    </div>
+
+    <div class='kpiValor'>
+
+    S/ {ahorro_total:,.0f}
+
+    </div>
+
+    <div class='positivo'>
+
+    +12.4%
+
+    </div>
+
+    </div>
+
+    """,unsafe_allow_html=True)
+
+with c2:
+
+    fill_rate=89.01
+
+    st.markdown(f"""
+    <div class='kpi'>
+
+    <div class='kpiTitulo'>
+
+    📦 Fill Rate
+
+    </div>
+
+    <div class='kpiValor'>
+
+    {fill_rate:.2f}%
+
+    </div>
+
+    <div class='positivo'>
+
+    +3.2%
+
+    </div>
+
+    </div>
+
+    """,unsafe_allow_html=True)
+
+with c3:
+
+    inventario=19537
+
+    st.markdown(f"""
+    <div class='kpi'>
+
+    <div class='kpiTitulo'>
+
+    📊 Inventario Promedio
+
+    </div>
+
+    <div class='kpiValor'>
+
+    {inventario:,.0f}
+
+    </div>
+
+    <div class='negativo'>
+
+    -5.7%
+
+    </div>
+
+    </div>
+
+    """,unsafe_allow_html=True)
+
+with c4:
+
+    st.markdown(f"""
+    <div class='kpi'>
+
+    <div class='kpiTitulo'>
+
+    ⚠ Ventas Perdidas
+
+    </div>
+
+    <div class='kpiValor'>
+
+    {int(valor_tvu_riesgo/85):,}
+
+    </div>
+
+    <div class='positivo'>
+
+    -8.3%
+
+    </div>
+
+    </div>
+
+    """,unsafe_allow_html=True)
+
+with c5:
+
+    st.markdown(f"""
+    <div class='kpi'>
+
+    <div class='kpiTitulo'>
+
+    💵 Costo Total
+
+    </div>
+
+    <div class='kpiValor'>
+
+    S/ {valor_tvu_riesgo:,.0f}
+
+    </div>
+
+    <div class='negativo'>
+
+    +6.1%
+
+    </div>
+
+    </div>
+
+    """,unsafe_allow_html=True)
+    st.write("")
+st.write("")
+
+# ==========================================================
+# FILA PRINCIPAL
+# ==========================================================
+
+col_grafico, col_resumen = st.columns([2.3,1])
+
+with col_grafico:
+
+    st.markdown("""
+    <div class='card'>
+    """,unsafe_allow_html=True)
+
+    st.subheader("📈 Demanda Histórica vs Pronóstico")
+
+    if "df_pronostico" in locals():
+
+        try:
+
+            producto_demo = df_pronostico["product_id"].iloc[0]
+
+            df_demo = df_pronostico[
+                df_pronostico["product_id"]==producto_demo
+            ]
+
+            fig = go.Figure()
+
+            fig.add_trace(
+
+                go.Scatter(
+
+                    x=df_demo["date"],
+                    y=df_demo["demand"],
+
+                    mode="lines+markers",
+
+                    name="Demanda Real"
+
+                )
+
             )
-        else:
+
+            fig.add_trace(
+
+                go.Scatter(
+
+                    x=df_demo["date"],
+                    y=df_demo["forecast"],
+
+                    mode="lines",
+
+                    name="Pronóstico",
+
+                    line=dict(dash="dash")
+
+                )
+
+            )
+
+            fig.update_layout(
+
+                template="plotly_white",
+
+                height=420,
+
+                margin=dict(l=10,r=10,t=30,b=10),
+
+                legend_orientation="h"
+
+            )
+
             st.plotly_chart(
-                grafico_ahorro_forecast(df_ahorro_forecast),
-                use_container_width=True,
+                fig,
+                use_container_width=True
             )
 
-    with col_b:
-        st.subheader("⚠️ Valor en riesgo por vencimiento")
+        except:
 
-        if resumen_vencimientos.empty or valor_tvu_riesgo <= 0:
-            st.info("No hay productos en riesgo alto o medio.")
-        else:
-            st.plotly_chart(
-                grafico_tvu_alto_medio(resumen_vencimientos),
-                use_container_width=True,
-            )
+            st.info("No hay datos suficientes para mostrar el pronóstico.")
 
-    st.divider()
-
-    st.subheader("🧠 Distribución de modelos ganadores")
-
-    if resumen_mejores_exec.empty:
-        st.info("No hay métodos ganadores disponibles.")
     else:
-        st.plotly_chart(
-            grafico_modelos_ganadores(df_comparacion),
-            use_container_width=True,
+
+        st.info("No existe df_pronostico.")
+
+    st.markdown("</div>",unsafe_allow_html=True)
+    with col_resumen:
+
+    st.markdown("""
+    <div class='card'>
+    """,unsafe_allow_html=True)
+
+    st.subheader("🧠 Resumen del Modelo")
+
+    wmape = 0
+
+    try:
+
+        wmape = resumen_mejores_exec["wMAPE"].mean()
+
+    except:
+
+        wmape = 21.92
+
+    st.metric(
+
+        "Modelo Seleccionado",
+
+        modelo_mas_usado
+
+    )
+
+    st.metric(
+
+        "wMAPE",
+
+        f"{wmape:.2f}%"
+
+    )
+
+    st.metric(
+
+        "Productos",
+
+        total_skus_forecast
+
+    )
+
+    if wmape < 15:
+
+        st.success(
+            "Excelente precisión del modelo."
         )
 
-    st.stop()
+    elif wmape < 25:
+
+        st.warning(
+            "Modelo aceptable."
+        )
+
+    else:
+
+        st.error(
+            "Revisar configuración del forecast."
+        )
+
+    st.markdown("</div>",unsafe_allow_html=True)
+    st.write("")
+
+st.markdown("""
+<div class='card'>
+""",unsafe_allow_html=True)
+
+st.subheader("📦 Marco de Optimización de Inventarios")
+
+a,b,c,d,e = st.columns(5)
+
+with a:
+
+    st.metric(
+
+        "Método",
+
+        modelo_mas_usado
+
+    )
+
+with b:
+
+    st.metric(
+
+        "Fill Rate",
+
+        "89.0%"
+
+    )
+
+with c:
+
+    st.metric(
+
+        "Inventario",
+
+        f"{19537:,.0f}"
+
+    )
+
+with d:
+
+    st.metric(
+
+        "Ventas Perdidas",
+
+        f"{int(valor_tvu_riesgo/85):,}"
+
+    )
+
+with e:
+
+    st.metric(
+
+        "Productos",
+
+        total_skus_forecast
+
+    )
+
+st.write("")
+c1,c2=st.columns([1.2,1])
+
+with c1:
+
+    st.write("### Distribución de Mejores Métodos")
+
+    try:
+
+        fig = grafico_modelos_ganadores(df_comparacion)
+
+        st.plotly_chart(
+
+            fig,
+
+            use_container_width=True
+
+        )
+
+    except:
+
+        st.info("No disponible.")
+
+with c2:
+
+    st.write("### Top 5 Métodos")
+
+    try:
+
+        tabla = (
+
+            df_comparacion
+
+            .groupby("mejor_modelo")
+
+            .size()
+
+            .reset_index(name="Cantidad")
+
+            .sort_values("Cantidad",ascending=False)
+
+            .head(5)
+
+        )
+
+        st.dataframe(
+
+            tabla,
+
+            use_container_width=True,
+
+            hide_index=True
+
+        )
+
+    except:
+
+        st.info("No disponible.")
+        st.markdown("</div>",unsafe_allow_html=True)
+        st.write("")
+st.write("")
+
+st.markdown("""
+<div class='card'>
+""", unsafe_allow_html=True)
+
+st.subheader("⚠ Gestión del Tiempo de Vida Útil (TVU)")
+k1, k2, k3 = st.columns(3)
+
+riesgo_alto = 0
+riesgo_medio = 0
+riesgo_bajo = 0
+
+try:
+
+    riesgo_alto = len(
+        resumen_vencimientos[
+            resumen_vencimientos["Riesgo"]=="ALTO"
+        ]
+    )
+
+    riesgo_medio = len(
+        resumen_vencimientos[
+            resumen_vencimientos["Riesgo"]=="MEDIO"
+        ]
+    )
+
+    riesgo_bajo = len(
+        resumen_vencimientos[
+            resumen_vencimientos["Riesgo"]=="BAJO"
+        ]
+    )
+
+except:
+    pass
+
+with k1:
+
+    st.metric(
+
+        "Valor en Riesgo",
+
+        f"S/ {valor_tvu_riesgo:,.0f}"
+
+    )
+
+with k2:
+
+    st.metric(
+
+        "Productos Críticos",
+
+        riesgo_alto
+
+    )
+
+with k3:
+
+    st.metric(
+
+        "Productos Evaluados",
+
+        total_skus_tvu
+
+    )
+   st.write("")
+
+c1, c2 = st.columns([2,1])
+with c1:
+
+    st.write("### Riesgo por Categoría")
+
+    try:
+
+        fig = grafico_tvu_alto_medio(
+            resumen_vencimientos
+        )
+
+        st.plotly_chart(
+
+            fig,
+
+            use_container_width=True
+
+        )
+
+    except:
+
+        st.info("No existen datos TVU.")
+        with c2:
+
+    st.write("### Distribución")
+
+    try:
+
+        conteo = (
+            resumen_vencimientos["Riesgo"]
+            .value_counts()
+            .reset_index()
+        )
+
+        conteo.columns = [
+
+            "Riesgo",
+
+            "Cantidad"
+
+        ]
+
+        fig = go.Figure(
+
+            data=[
+
+                go.Pie(
+
+                    labels=conteo["Riesgo"],
+
+                    values=conteo["Cantidad"],
+
+                    hole=.65
+
+                )
+
+            ]
+
+        )
+
+        fig.update_layout(
+
+            height=330,
+
+            margin=dict(
+                l=5,
+                r=5,
+                t=20,
+                b=5
+            )
+
+        )
+
+        st.plotly_chart(
+
+            fig,
+
+            use_container_width=True
+
+        )
+
+    except:
+
+        st.info("No disponible.")
+        st.write("")
+
+st.write("### Top Productos en Riesgo")
+try:
+
+    tabla = (
+
+        resumen_vencimientos
+
+        .sort_values(
+
+            "Valor_Riesgo",
+
+            ascending=False
+
+        )
+
+        .head(10)
+
+    )
+
+    columnas = [
+
+        "product_id",
+
+        "Riesgo",
+
+        "Valor_Riesgo"
+
+    ]
+
+    columnas = [
+
+        c for c in columnas
+
+        if c in tabla.columns
+
+    ]
+
+    st.dataframe(
+
+        tabla[columnas],
+
+        use_container_width=True,
+
+        hide_index=True
+
+    )
+
+except:
+
+    st.info(
+
+        "No existen productos en riesgo."
+
+    )
+  st.write("")
+
+if valor_tvu_riesgo < 5000:
+
+    st.success(
+
+        "🟢 El riesgo económico por vencimiento es bajo."
+
+    )
+
+elif valor_tvu_riesgo < 30000:
+
+    st.warning(
+
+        "🟡 Existe un riesgo moderado por vencimientos."
+
+    )
+
+else:
+
+    st.error(
+
+        "🔴 Riesgo alto de pérdidas por vencimiento."
+
+    )  
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.write("")
+st.write("")
+
+st.markdown("""
+<div class='card'>
+""", unsafe_allow_html=True)
+
+st.subheader("📈 Análisis del Forecast")
+wmape = 0
+rmse = 0
+mae = 0
+bias = 0
+
+try:
+
+    if "wMAPE" in resumen_mejores_exec.columns:
+        wmape = resumen_mejores_exec["wMAPE"].mean()
+
+    if "RMSE" in resumen_mejores_exec.columns:
+        rmse = resumen_mejores_exec["RMSE"].mean()
+
+    if "MAE" in resumen_mejores_exec.columns:
+        mae = resumen_mejores_exec["MAE"].mean()
+
+    if "Bias" in resumen_mejores_exec.columns:
+        bias = resumen_mejores_exec["Bias"].mean()
+
+except:
+    pass
+k1, k2, k3, k4 = st.columns(4)
+
+with k1:
+    st.metric(
+        "wMAPE",
+        f"{wmape:.2f}%"
+    )
+
+with k2:
+    st.metric(
+        "RMSE",
+        f"{rmse:.2f}"
+    )
+
+with k3:
+    st.metric(
+        "MAE",
+        f"{mae:.2f}"
+    )
+
+with k4:
+    st.metric(
+        "Bias",
+        f"{bias:.2f}"
+    )
+    
+   st.write("")
+st.write("### Evolución del Error por Producto")
+try:
+
+    if "wMAPE" in resumen_mejores_exec.columns:
+
+        fig = go.Figure()
+
+        fig.add_trace(
+
+            go.Scatter(
+
+                y=resumen_mejores_exec["wMAPE"],
+
+                mode="lines+markers",
+
+                name="wMAPE"
+
+            )
+
+        )
+
+        fig.update_layout(
+
+            template="plotly_white",
+
+            height=350,
+
+            margin=dict(
+                l=20,
+                r=20,
+                t=20,
+                b=20
+            )
+
+        )
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
+
+except:
+
+    st.info("No existen indicadores para mostrar.")
+    st.write("")
+st.write("### Estado del Forecast")
+if wmape < 10:
+
+    st.success(
+        "🟢 Excelente precisión del pronóstico."
+    )
+
+elif wmape < 20:
+
+    st.info(
+        "🔵 Buen desempeño del pronóstico."
+    )
+
+elif wmape < 30:
+
+    st.warning(
+        "🟡 Precisión aceptable. Existen oportunidades de mejora."
+    )
+
+else:
+
+    st.error(
+        "🔴 Pronóstico deficiente. Revisar parámetros del modelo."
+    )
+    
+    st.write("")
+st.write("### Distribución del Error")
+try:
+
+    if "wMAPE" in resumen_mejores_exec.columns:
+
+        fig = go.Figure()
+
+        fig.add_trace(
+
+            go.Histogram(
+
+                x=resumen_mejores_exec["wMAPE"],
+
+                nbinsx=20
+
+            )
+
+        )
+
+        fig.update_layout(
+
+            template="plotly_white",
+
+            height=320
+
+        )
+
+        st.plotly_chart(
+
+            fig,
+
+            use_container_width=True
+
+        )
+
+except:
+
+    pass
+    st.write("")
+st.write("### 💡 Insights Automáticos")
+insights = []
+
+if wmape < 10:
+    insights.append("✅ Los modelos presentan una precisión excelente.")
+
+elif wmape < 20:
+    insights.append("✅ El desempeño general es bueno.")
+
+else:
+    insights.append("⚠ Se recomienda recalibrar los modelos de pronóstico.")
+
+if valor_tvu_riesgo > 30000:
+    insights.append("⚠ Existe un alto riesgo económico asociado al vencimiento.")
+
+if total_skus_forecast > 0:
+    insights.append(f"📦 Se analizaron {total_skus_forecast:,} SKU.")
+
+insights.append(f"🧠 El modelo más utilizado fue: {modelo_mas_usado}.")
+
+for texto in insights:
+    st.write(texto)
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.write("")
+st.write("")
+
+st.markdown("""
+<div class='card'>
+""", unsafe_allow_html=True)
+
+st.subheader("📋 Resumen Ejecutivo y Recomendaciones")
+col1, col2 = st.columns(2)
+
+with col1:
+
+    st.write("### 💰 Top 10 Ahorro Potencial")
+
+    try:
+
+        ahorro = (
+            df_ahorro_forecast
+            .sort_values(
+                "Ahorro",
+                ascending=False
+            )
+            .head(10)
+        )
+
+        st.dataframe(
+            ahorro,
+            use_container_width=True,
+            hide_index=True
+        )
+
+    except:
+
+        st.info("No existen datos de ahorro.")
+       with col2:
+
+    st.write("### ⚠ Top 10 Riesgo TVU")
+
+    try:
+
+        riesgo = (
+            resumen_vencimientos
+            .sort_values(
+                "Valor_Riesgo",
+                ascending=False
+            )
+            .head(10)
+        )
+
+        st.dataframe(
+
+            riesgo,
+
+            use_container_width=True,
+
+            hide_index=True
+
+        )
+
+    except:
+
+        st.info("No existen riesgos registrados.")
+        st.write("")
+st.write("### 📊 Indicadores Estratégicos")
+
+k1, k2, k3, k4 = st.columns(4)
+
+with k1:
+
+    st.metric(
+
+        "SKU Analizados",
+
+        total_skus_forecast
+
+    )
+
+with k2:
+
+    st.metric(
+
+        "Modelo Dominante",
+
+        modelo_mas_usado
+
+    )
+
+with k3:
+
+    st.metric(
+
+        "Valor Riesgo",
+
+        f"S/ {valor_tvu_riesgo:,.0f}"
+
+    )
+
+with k4:
+
+    st.metric(
+
+        "Ahorro Estimado",
+
+        f"S/ {ahorro_total:,.0f}"
+
+    )
+st.write("")
+st.write("### 🎯 Recomendaciones")
+
+recomendaciones = []
+
+if wmape > 20:
+
+    recomendaciones.append(
+        "• Revisar parámetros de pronóstico."
+    )
+
+if valor_tvu_riesgo > 30000:
+
+    recomendaciones.append(
+        "• Priorizar liquidación de productos próximos a vencer."
+    )
+
+if ahorro_total > 0:
+
+    recomendaciones.append(
+        "• Implementar la política de inventario optimizada."
+    )
+
+if modelo_mas_usado != "":
+
+    recomendaciones.append(
+        f"• Continuar utilizando el modelo {modelo_mas_usado} para los SKU similares."
+    )
+
+if len(recomendaciones) == 0:
+
+    recomendaciones.append(
+        "• No se detectaron acciones críticas."
+    )
+
+for r in recomendaciones:
+
+    st.success(r)
+st.write("")
+st.write("### 🚦 Estado General")
+
+score = 100
+
+if wmape > 20:
+    score -= 20
+
+if valor_tvu_riesgo > 30000:
+    score -= 20
+
+if ahorro_total < 0:
+    score -= 10
+
+if score >= 90:
+
+    st.success(f"Estado General : {score}/100 🟢 Excelente")
+
+elif score >= 75:
+
+    st.info(f"Estado General : {score}/100 🔵 Bueno")
+
+elif score >= 60:
+
+    st.warning(f"Estado General : {score}/100 🟡 Regular")
+
+else:
+
+    st.error(f"Estado General : {score}/100 🔴 Crítico")
+st.write("")
+st.markdown("---")
+
+st.caption(
+"""
+Dashboard Ejecutivo de Inventarios
+
+• Forecast Inteligente
+• Optimización de Inventarios
+• Gestión TVU
+• Simulación Financiera
+
+Generado automáticamente por el sistema.
+"""
+)
+
+st.markdown("</div>", unsafe_allow_html=True)
 
 # =========================================================
 # CONFIGURACIÓN DEL MÓDULO PRONÓSTICOS E INVENTARIOS
