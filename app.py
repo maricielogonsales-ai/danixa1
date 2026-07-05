@@ -1380,9 +1380,8 @@ with col_grafico:
         st.info("No existe df_pronostico.")
 
     st.markdown("</div>",unsafe_allow_html=True)
-    with col_resumen:
-
-st.markdown("""<div class='card'>""",unsafe_allow_html=True)
+with col1:
+    st.markdown("""<div class='card'>""", unsafe_allow_html=True)
 
     st.subheader("🧠 Resumen del Modelo")
 
